@@ -7,3 +7,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     env = gym.make('auto-match-game-v0')
     sys.exit(app.exec_())
+

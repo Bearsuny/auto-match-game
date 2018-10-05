@@ -14,26 +14,22 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtGui import QPalette
 from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt
-from PyQt5.QtCore import QThread
-from PyQt5.QtCore import pyqtSignal
 
 from auto_match_game.ui.config import AutoMatchGameUIConfig as UIC
 from reward_grid.config import RewardGridConfig as RGC
-from reward_grid.net_eval import get_reward_grid_roi
-
-import torch
 
 
 class AutoMatchGameUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.ref_images = os.listdir(UIC.reward_ref_image_path)
-        self.positions = [(i, j) for i in range(UIC.reward_row) for j in range(UIC.reward_col)]
-        self.grid_result = []
+        self.ref_images = []
 
-        self.reward_grid_net = torch.load(RGC.reward_grid_net_save_path)
-        self.reward_grid_net.to(self.reward_grid_net.device)
-        self.reward_grid_net.eval()
+        for reward_item in RGC.reward_name:
+            for ref_item in os.listdir(UIC.reward_ref_image_path):
+                if reward_item in ref_item:
+                    self.ref_images.append(ref_item)
+
+        self.positions = [(i, j) for i in range(UIC.reward_row) for j in range(UIC.reward_col)]
 
         self.widget1 = QWidget(self)
         self.widget2 = QWidget(self)
@@ -47,6 +43,7 @@ class AutoMatchGameUI(QWidget):
         self.train_button = QPushButton()
 
         self.label_list = []
+
         self.init_ui()
 
     def init_ui(self):
@@ -85,8 +82,8 @@ class AutoMatchGameUI(QWidget):
 
             self.grid_layout.addWidget(lbl, *position)
 
-        self.step_label.setText(f'STEP: 10')
-        self.score_label.setText(f'SCORE: 100')
+        self.step_label.setText(f'STEP: None')
+        self.score_label.setText(f'SCORE: None')
         self.train_button.setText(f'TRAIN')
         font = QFont()
         font.setPixelSize(36)
@@ -114,34 +111,6 @@ class AutoMatchGameUI(QWidget):
         cp = QDesktopWidget().availableGeometry().center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
-
-    def generate_grid_result(self):
-        self.grid_result = []
-        pix = self.grab()
-        pix.save(UIC.screen_output_path)
-        reward_grid_roi = get_reward_grid_roi(UIC.screen_output_path, UIC.crop_box)
-
-        with torch.no_grad():
-            for row_item in range(RGC.reward_grid_row):
-                data = reward_grid_roi[row_item * RGC.reward_grid_col:(row_item + 1) * RGC.reward_grid_col]
-                data = torch.from_numpy(data).float()
-                data = data.to(self.reward_grid_net.device)
-                output = self.reward_grid_net(data)
-                result = torch.argmax(output, dim=1)
-                result = result.cpu().numpy()
-                self.grid_result.append(result)
-        self.grid_result = np.array(self.grid_result, dtype=np.int).transpose()
-        print(self.grid_result)
-
-    def reset(self):
-        for position in self.positions:
-            pick_num = np.random.randint(0, len(self.ref_images))
-            pixmap = QPixmap(os.path.join(UIC.reward_ref_image_path, self.ref_images[int(pick_num)]))
-            pixmap = pixmap.scaled(*UIC.scale_size)
-
-            self.label_list[position[0] * UIC.reward_row + position[1]].setPixmap(pixmap)
-            lbl = QLabel(self)
-            lbl.setAlignment(Qt.AlignCenter)
 
 
 if __name__ == '__main__':
