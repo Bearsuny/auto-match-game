@@ -36,7 +36,7 @@ def reward_ref_image_init(reward_ref_image_path):
 
 
 def reshape_reward_grid_roi(roi):
-    reshape = [np.concatenate(roi[i * 8: (i + 1) * 8]) for i in range(RGC.reward_grid_row)]
+    reshape = [np.concatenate(roi[i * RGC.reward_grid_col: (i + 1) * RGC.reward_grid_col]) for i in range(RGC.reward_grid_row)]
     return np.concatenate(reshape, axis=1)
 
 
