@@ -6,5 +6,6 @@ class AutoMatchGameEnvConfig:
 
     grid_row = 8
     grid_col = 8
-    direction = 4
     reward_category = 8
+
+    sleep_msec = 1000

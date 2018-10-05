@@ -14,6 +14,9 @@ import torch
 
 from PyQt5.QtCore import QThread
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtGui import QPalette
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 
 class AutoMatchGameThread(QThread):
@@ -36,7 +39,7 @@ class AutoMatchGameThread(QThread):
                 self.render_signal.emit()
                 action = self.env.action_space.sample()
                 self.step_signal.emit(action)
-                QThread.msleep(500)
+                QThread.msleep(EC.sleep_msec)
                 if self.done:
                     print(f'Epoch {i:03}, Step {j:03} steps, Reward is {self.reward}.')
                     break
@@ -64,7 +67,7 @@ class AutoMatchGameEnv(gym.Env):
         self.reward_grid_net.to(self.reward_grid_net.device)
         self.reward_grid_net.eval()
 
-        self.action_space = spaces.MultiDiscrete(np.array([EC.grid_row, EC.grid_col, EC.direction]))
+        self.action_space = spaces.MultiDiscrete(np.array([EC.grid_row, EC.grid_col]))
 
         self.grid_result = []
 
@@ -79,30 +82,43 @@ class AutoMatchGameEnv(gym.Env):
 
     def step(self, action):
         self.generate_grid_result()
-        x, y, direction = action
+        x, y = action
+        direction = self.generate_direction(action)
         flag1 = False
-        if action[-1] == 0:
+        pe = QPalette()
+        pe.setColor(QPalette.Background, Qt.red)
+        if direction == 0:
             if x - 1 >= 0:
                 flag1 = True
                 self.grid_result[x - 1][y], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x - 1][y]
-        if action[-1] == 1:
+                self.ui.label_list[x * UIC.reward_row + y].setPalette(pe)
+                self.ui.label_list[(x - 1) * UIC.reward_row + y].setPalette(pe)
+        if direction == 1:
             if y + 1 <= EC.grid_col - 1:
                 flag1 = True
                 self.grid_result[x][y + 1], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x][y + 1]
-        if action[-1] == 2:
+                self.ui.label_list[x * UIC.reward_row + y].setPalette(pe)
+                self.ui.label_list[x * UIC.reward_row + (y + 1)].setPalette(pe)
+        if direction == 2:
             if x + 1 <= EC.grid_row - 1:
                 flag1 = True
                 self.grid_result[x + 1][y], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x + 1][y]
-        if action[-1] == 3:
+                self.ui.label_list[x * UIC.reward_row + y].setPalette(pe)
+                self.ui.label_list[(x + 1) * UIC.reward_row + y].setPalette(pe)
+        if direction == 3:
             if y - 1 >= 0:
                 flag1 = True
                 self.grid_result[x][y - 1], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x][y - 1]
+                self.ui.label_list[x * UIC.reward_row + y].setPalette(pe)
+                self.ui.label_list[x * UIC.reward_row + y - 1].setPalette(pe)
 
-        # if flag1:
-        #     self.calc_reward()
-        #     self.game_steps -= 1
-        self.calc_reward()
-        self.game_steps -= 1
+        if flag1:
+            self.calc_reward()
+            self.game_steps -= 1
+        else:
+            print(action, direction)
+
+        self.match_result()
 
         if self.game_steps == 0:
             self.ui.amg_thread.done = True
@@ -121,9 +137,15 @@ class AutoMatchGameEnv(gym.Env):
         self.ui.step_label.setText(f'STEP: {self.game_steps}')
         self.ui.score_label.setText(f'SCORE: {self.ui.amg_thread.reward}')
         for position in self.ui.positions:
+            pe = QPalette()
+            if sum(position) % 2 == 0:
+                pe.setColor(QPalette.Background, QColor(106, 100, 102))
+            else:
+                pe.setColor(QPalette.Background, QColor(76, 74, 75))
             pixmap = QPixmap(os.path.join(UIC.reward_ref_image_path, self.ui.ref_images[int(self.grid_result[position[0]][position[1]])]))
             pixmap = pixmap.scaled(*UIC.scale_size)
             self.ui.label_list[position[0] * UIC.reward_row + position[1]].setPixmap(pixmap)
+            self.ui.label_list[position[0] * UIC.reward_row + position[1]].setPalette(pe)
 
     def generate_grid_result(self):
         self.grid_result = []
@@ -147,3 +169,37 @@ class AutoMatchGameEnv(gym.Env):
         reward_score = [i + 1 for i in range(len(self.ui.ref_images))]
         for i in range(len(self.ui.ref_images)):
             self.ui.amg_thread.reward += reward_score[i] * len(self.grid_result[np.where(self.grid_result == i)])
+
+    def generate_direction(self, action):
+        x, y = action
+        if x == 0:
+            if y == 0:
+                direction = np.random.randint(1, 3)
+            elif y == EC.grid_col - 1:
+                direction = np.random.randint(2, 4)
+            else:
+                direction = np.random.randint(1, 4)
+        elif x == EC.grid_row - 1:
+            if y == 0:
+                direction = np.random.randint(0, 2)
+            elif y == EC.grid_col - 1:
+                direction = np.random.randint(0, 2)
+                if direction == 1:
+                    direction = 3
+            else:
+                direction = np.random.randint(0, 3)
+                if direction == 2:
+                    direction = 3
+        else:
+            if y == 0:
+                direction = np.random.randint(0, 3)
+            elif y == EC.grid_col - 1:
+                direction = np.random.randint(1, 4)
+                if direction == 1:
+                    direction = 0
+            else:
+                direction = np.random.randint(0, 4)
+        return direction
+
+    def match_result(self):
+        pass
