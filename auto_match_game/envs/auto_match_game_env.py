@@ -71,13 +71,13 @@ class AutoMatchGameEnv(gym.Env):
 
         self.grid_result = []
 
-    def train(self):
         self.ui.amg_thread = AutoMatchGameThread(self)
 
         self.ui.amg_thread.step_signal.connect(self.step)
         self.ui.amg_thread.reset_signal.connect(self.reset)
         self.ui.amg_thread.render_signal.connect(self.render)
 
+    def train(self):
         self.ui.amg_thread.start()
 
     def step(self, action):
@@ -138,6 +138,15 @@ class AutoMatchGameEnv(gym.Env):
         if self.game_steps == 0:
             self.ui.amg_thread.done = True
 
+        self.ui.amg_thread.observation = self.grid_result.copy()
+        self.ui.amg_thread.info = None
+
+        print(f'action: {action}, {direction}')
+        print(f'observation:\n{self.ui.amg_thread.observation}')
+        print(f'reward: {self.ui.amg_thread.reward}')
+        print(f'done  : {self.ui.amg_thread.done}')
+        print(f'info  : {self.ui.amg_thread.info}')
+
     def reset(self):
         self.game_steps = EC.game_steps
         self.ui.amg_thread.done = False
@@ -151,7 +160,6 @@ class AutoMatchGameEnv(gym.Env):
         self.grid_result = self.get_match_result(grid_test)
 
     def render(self, mode='human'):
-        print(f'grid_result: {self.grid_result}')
         self.ui.step_label.setText(f'STEP: {self.game_steps}')
         self.ui.score_label.setText(f'SCORE: {self.ui.amg_thread.reward}')
         for position in self.ui.positions:
@@ -239,8 +247,6 @@ class AutoMatchGameEnv(gym.Env):
                         result_temp.append(item_row)
                         result_temp.append(item_col)
         result = []
-        print(result_temp)
-        print(len(result_temp))
         for i in range(len(result_temp)):
             flag = False
             for j in range(len(result_temp)):
@@ -249,8 +255,6 @@ class AutoMatchGameEnv(gym.Env):
                         flag = True
             if not flag:
                 result.append(result_temp[i])
-
-        print(f'result: {result}')
         if result != []:
             for i, item in enumerate(result):
                 x, y = max(item)
