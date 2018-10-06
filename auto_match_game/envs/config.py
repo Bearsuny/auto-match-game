@@ -1,6 +1,6 @@
 class AutoMatchGameEnvConfig:
-    train_max_epochs = 5
-    train_max_steps = 10
+    train_max_epochs = 50
+    train_max_steps = 100
 
     game_steps = 10
 

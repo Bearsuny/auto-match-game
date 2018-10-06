@@ -113,12 +113,27 @@ class AutoMatchGameEnv(gym.Env):
                 self.ui.label_list[x * UIC.reward_row + y - 1].setPalette(pe)
 
         if flag1:
-            self.calc_reward()
-            self.game_steps -= 1
+            grid_test = self.grid_result.copy()
+            grid_old_result = self.grid_result.copy()
+            self.grid_result = self.get_match_result(grid_test)
+            if not ((self.grid_result == grid_old_result).all()):
+                self.game_steps -= 1
+                self.calc_reward()
+            else:
+                if direction == 0:
+                    if x - 1 >= 0:
+                        self.grid_result[x - 1][y], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x - 1][y]
+                if direction == 1:
+                    if y + 1 <= EC.grid_col - 1:
+                        self.grid_result[x][y + 1], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x][y + 1]
+                if direction == 2:
+                    if x + 1 <= EC.grid_row - 1:
+                        self.grid_result[x + 1][y], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x + 1][y]
+                if direction == 3:
+                    if y - 1 >= 0:
+                        self.grid_result[x][y - 1], self.grid_result[x][y] = self.grid_result[x][y], self.grid_result[x][y - 1]
         else:
             print(action, direction)
-
-        self.match_result()
 
         if self.game_steps == 0:
             self.ui.amg_thread.done = True
@@ -132,8 +147,11 @@ class AutoMatchGameEnv(gym.Env):
             pixmap = pixmap.scaled(*UIC.scale_size)
             self.ui.label_list[position[0] * UIC.reward_row + position[1]].setPixmap(pixmap)
         self.generate_grid_result()
+        grid_test = self.grid_result.copy()
+        self.grid_result = self.get_match_result(grid_test)
 
     def render(self, mode='human'):
+        print(f'grid_result: {self.grid_result}')
         self.ui.step_label.setText(f'STEP: {self.game_steps}')
         self.ui.score_label.setText(f'SCORE: {self.ui.amg_thread.reward}')
         for position in self.ui.positions:
@@ -201,5 +219,104 @@ class AutoMatchGameEnv(gym.Env):
                 direction = np.random.randint(0, 4)
         return direction
 
-    def match_result(self):
-        pass
+    def get_match_result(self, grid):
+        match_flag = -1
+        result_row = self.match(grid)
+        result_col = self.match(grid, reverse=True)
+        result_temp = []
+        if result_row == [] and result_col != []:
+            for item_col in result_col:
+                result_temp.append(item_col)
+        elif result_col == [] and result_row != []:
+            for item_row in result_row:
+                result_temp.append(item_row)
+        elif result_col != [] and result_row != []:
+            for item_row in result_row:
+                for item_col in result_col:
+                    if item_row & item_col != set():
+                        result_temp.append(item_row | item_col)
+                    else:
+                        result_temp.append(item_row)
+                        result_temp.append(item_col)
+        result = []
+        print(result_temp)
+        print(len(result_temp))
+        for i in range(len(result_temp)):
+            flag = False
+            for j in range(len(result_temp)):
+                if i != j:
+                    if result_temp[i].issubset(result_temp[j]):
+                        flag = True
+            if not flag:
+                result.append(result_temp[i])
+
+        print(f'result: {result}')
+        if result != []:
+            for i, item in enumerate(result):
+                x, y = max(item)
+                result[i].remove((x, y))
+                grid[x][y] += 1
+            for group in result:
+                for item in group:
+                    grid[item[0]][item[1]] = match_flag
+
+        grid_temp = []
+        for i in range(grid.shape[1]):
+            col = grid[:, i]
+            col_prefix = [match_flag] * len(col[np.where(col == match_flag)])
+            col = [item for item in col if item != match_flag]
+            col_prefix.extend(col)
+            col = col_prefix
+            grid_temp.append(col)
+        grid_temp = np.array(grid_temp, dtype=np.int)
+        grid_temp = grid_temp.transpose()
+        x, y = np.where(grid_temp == match_flag)
+        for x_item, y_item in zip(x, y):
+            grid_temp[x_item][y_item] = np.random.randint(0, 8)
+
+        if result == []:
+            return grid
+        else:
+            return self.get_match_result(grid_temp)
+
+    def match(self, grid, reverse=False):
+        result = []
+        if reverse:
+            grid_copy = grid.transpose().copy()
+        else:
+            grid_copy = grid.copy()
+        for i in range(EC.grid_row):
+            c_item = None
+            p_item = None
+            n = 1
+            for j in range(EC.grid_col):
+                c_item = grid_copy[i][j]
+                if j != 0:
+                    p_item = grid_copy[i][j - 1]
+                if p_item == c_item:
+                    n += 1
+                    if j == EC.grid_col - 1:
+                        if n >= 3:
+                            k_list = []
+                            if p_item < EC.reward_category - 1:
+                                if reverse:
+                                    for k in range(1, n + 1):
+                                        k_list.append((j - k, i))
+                                else:
+                                    for k in range(1, n + 1):
+                                        k_list.append((i, j - k))
+                                result.append(set(k_list))
+                        n = 1
+                else:
+                    if n >= 3:
+                        k_list = []
+                        if p_item < EC.reward_category - 1:
+                            if reverse:
+                                for k in range(1, n + 1):
+                                    k_list.append((j - k, i))
+                            else:
+                                for k in range(1, n + 1):
+                                    k_list.append((i, j - k))
+                            result.append(set(k_list))
+                    n = 1
+        return result
